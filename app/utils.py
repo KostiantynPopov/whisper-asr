@@ -125,3 +125,78 @@ def load_audio(file: BinaryIO, encode=True, sr: int = CONFIG.SAMPLE_RATE):
         out = file.read()
 
     return np.frombuffer(out, np.int16).flatten().astype(np.float32) / 32768.0
+
+
+def calculate_initial_silence(
+    audio_array, sample_rate=16000, silence_threshold=0.01, min_speech_duration=0.2
+):
+    """
+    Calculate initial silence duration in audio.
+
+    This function analyzes the audio waveform to detect the start of speech,
+    accounting for initial silence periods. It uses RMS (Root Mean Square)
+    energy calculation in sliding windows to identify when speech begins.
+
+    Parameters
+    ----------
+    audio_array : np.ndarray
+        NumPy array containing the audio waveform, in float32 dtype (normalized).
+    sample_rate : int, optional
+        Sample rate of the audio in Hz. Default is 16000.
+    silence_threshold : float, optional
+        RMS threshold for silence detection as a fraction of maximum RMS.
+        Default is 0.01 (1% of maximum RMS).
+    min_speech_duration : float, optional
+        Minimum duration of speech in seconds to confirm speech start.
+        Default is 0.2 seconds.
+
+    Returns
+    -------
+    float
+        Time offset in seconds until speech starts. Returns 0.0 if:
+        - Audio array is empty
+        - No speech detected
+        - Window size exceeds audio length
+    """
+    if len(audio_array) == 0:
+        return 0.0
+
+    # Calculate window size (100ms windows)
+    window_size = int(sample_rate * 0.1)
+    if window_size > len(audio_array):
+        return 0.0
+
+    # Calculate RMS for each window
+    rms_values = []
+    for i in range(0, len(audio_array) - window_size, window_size):
+        window = audio_array[i:i+window_size]
+        rms = np.sqrt(np.mean(window**2))
+        rms_values.append(rms)
+
+    if not rms_values:
+        return 0.0
+
+    # Find maximum RMS to determine threshold
+    max_rms = max(rms_values)
+    threshold = max_rms * silence_threshold
+
+    # Find first window above threshold with minimum speech duration
+    speech_start_window = None
+    consecutive_speech_windows = 0
+    required_windows = int(min_speech_duration * 10)  # 100ms windows
+
+    for i, rms in enumerate(rms_values):
+        if rms > threshold:
+            consecutive_speech_windows += 1
+            if consecutive_speech_windows >= required_windows:
+                speech_start_window = i - required_windows + 1
+                break
+        else:
+            consecutive_speech_windows = 0
+
+    if speech_start_window is None:
+        return 0.0
+
+    # Return time offset in seconds
+    offset = (speech_start_window * window_size) / sample_rate
+    return max(0.0, offset)

@@ -10,6 +10,7 @@ from whisperx.utils import ResultWriter, SubtitlesWriter, WriteJSON, WriteSRT, W
 
 from app.asr_models.asr_model import ASRModel
 from app.config import CONFIG
+from app.utils import calculate_initial_silence
 
 
 class WhisperXASR(ASRModel):
@@ -85,6 +86,23 @@ class WhisperXASR(ASRModel):
             diarize_segments = self.model['diarize_model'](audio, min_speakers, max_speakers)
             result = whisperx.assign_word_speakers(diarize_segments, result)
         result["language"] = language
+
+        # Apply initial silence offset if specified
+        offset = 0.0
+        if options and options.get("initial_offset") is not None:
+            offset = float(options["initial_offset"])
+        elif options and options.get("auto_calculate_offset", False):
+            offset = calculate_initial_silence(audio)
+
+        if offset > 0:
+            for segment in result["segments"]:
+                segment["start"] += offset
+                segment["end"] += offset
+                # Apply offset to word timestamps if present
+                if "words" in segment and segment["words"]:
+                    for word in segment["words"]:
+                        word["start"] += offset
+                        word["end"] += offset
 
         output_file = StringIO()
         self.write_result(result, output_file, output)

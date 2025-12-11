@@ -86,6 +86,14 @@ async def asr(
         description="Max speakers in this file",
         include_in_schema=(True if CONFIG.ASR_ENGINE == "whisperx" else False),
     ),
+    initial_offset: Union[float, None] = Query(
+        default=None,
+        description="Initial silence offset in seconds to add to all timestamps",
+    ),
+    auto_calculate_offset: bool = Query(
+        default=False,
+        description="Automatically calculate initial silence offset from audio",
+    ),
     output: Union[str, None] = Query(default="txt", enum=["txt", "vtt", "srt", "tsv", "json"]),
 ):
     result = asr_model.transcribe(
@@ -95,7 +103,13 @@ async def asr(
         initial_prompt,
         vad_filter,
         word_timestamps,
-        {"diarize": diarize, "min_speakers": min_speakers, "max_speakers": max_speakers},
+        {
+            "diarize": diarize,
+            "min_speakers": min_speakers,
+            "max_speakers": max_speakers,
+            "initial_offset": initial_offset,
+            "auto_calculate_offset": auto_calculate_offset,
+        },
         output,
     )
     return StreamingResponse(

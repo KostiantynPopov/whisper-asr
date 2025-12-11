@@ -8,7 +8,7 @@ from faster_whisper import WhisperModel
 
 from app.asr_models.asr_model import ASRModel
 from app.config import CONFIG
-from app.utils import ResultWriter, WriteJSON, WriteSRT, WriteTSV, WriteTXT, WriteVTT
+from app.utils import ResultWriter, WriteJSON, WriteSRT, WriteTSV, WriteTXT, WriteVTT, calculate_initial_silence
 
 
 class FasterWhisperASR(ASRModel):
@@ -58,6 +58,23 @@ class FasterWhisperASR(ASRModel):
                 segments.append(segment)
                 text = text + segment.text
             result = {"language": options_dict.get("language", info.language), "segments": segments, "text": text}
+
+        # Apply initial silence offset if specified
+        offset = 0.0
+        if options and options.get("initial_offset") is not None:
+            offset = float(options["initial_offset"])
+        elif options and options.get("auto_calculate_offset", False):
+            offset = calculate_initial_silence(audio)
+
+        if offset > 0:
+            for segment in result["segments"]:
+                segment.start += offset
+                segment.end += offset
+                # Apply offset to word timestamps if present
+                if hasattr(segment, 'words') and segment.words:
+                    for word in segment.words:
+                        word.start += offset
+                        word.end += offset
 
         output_file = StringIO()
         self.write_result(result, output_file, output)

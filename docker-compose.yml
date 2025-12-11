@@ -1,12 +1,13 @@
-version: "3.4"
-
 services:
   whisper-asr-webservice:
     build:
       context: .
       dockerfile: Dockerfile
     environment:
-      - ASR_MODEL=base
+      - ASR_MODEL=large-v2
+      - ASR_ENGINE=faster_whisper
+      - ASR_DEVICE=cpu
+      - ASR_QUANTIZATION=int8
     ports:
       - "9000:9000"
     volumes:
