@@ -58,11 +58,15 @@ class WhisperXASR(ASRModel):
         options_dict = {"task": task}
         if language:
             options_dict["language"] = language
+            print(f"Using specified language: {language}")
         if initial_prompt:
             options_dict["initial_prompt"] = initial_prompt
         with self.model_lock:
             result = self.model['whisperx'].transcribe(audio, **options_dict)
-            language = result["language"]
+            detected_language = result["language"]
+            if language and detected_language != language:
+                print(f"WARNING: Specified language '{language}' differs from detected language '{detected_language}'")
+            language = detected_language
 
         # Load the required model and cache it
         # If we transcribe models in many different languages, this may lead to OOM propblems

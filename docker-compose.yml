@@ -3,11 +3,14 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+    env_file:
+      - .env
     environment:
-      - ASR_MODEL=large-v2
-      - ASR_ENGINE=faster_whisper
+      - ASR_MODEL=large-v3
+      - ASR_ENGINE=whisperx
       - ASR_DEVICE=cpu
       - ASR_QUANTIZATION=int8
+      - UVICORN_WORKERS=4
     ports:
       - "9000:9000"
     volumes:

@@ -3,6 +3,8 @@ services:
     build:
       context: .
       dockerfile: Dockerfile.gpu
+    env_file:
+      - .env      
     deploy:
       resources:
         reservations:
