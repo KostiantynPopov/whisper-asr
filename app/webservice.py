@@ -1,6 +1,7 @@
 import importlib.metadata
 import os
 from os import path
+from threading import Lock
 from typing import Annotated, Optional, Union
 from urllib.parse import quote
 
@@ -16,8 +17,9 @@ from app.config import CONFIG
 from app.factory.asr_model_factory import ASRModelFactory
 from app.utils import load_audio
 
-asr_model = ASRModelFactory.create_asr_model()
-asr_model.load_model()
+# Lazy loading: model will be loaded per worker on first request
+asr_model = None
+asr_model_lock = Lock()
 
 LANGUAGE_CODES = sorted(tokenizer.LANGUAGES.keys())
 
@@ -96,6 +98,15 @@ async def asr(
     ),
     output: Union[str, None] = Query(default="txt", enum=["txt", "vtt", "srt", "tsv", "json"]),
 ):
+    global asr_model
+    # Lazy loading: load model on first request per worker (thread-safe)
+    if asr_model is None:
+        with asr_model_lock:
+            # Double-check pattern: another thread might have loaded it while we waited
+            if asr_model is None:
+                asr_model = ASRModelFactory.create_asr_model()
+                asr_model.load_model()
+    
     result = asr_model.transcribe(
         load_audio(audio_file.file, encode),
         task,
@@ -127,6 +138,15 @@ async def detect_language(
     audio_file: UploadFile = File(...),  # noqa: B008
     encode: bool = Query(default=True, description="Encode audio first through FFmpeg"),
 ):
+    global asr_model
+    # Lazy loading: load model on first request per worker (thread-safe)
+    if asr_model is None:
+        with asr_model_lock:
+            # Double-check pattern: another thread might have loaded it while we waited
+            if asr_model is None:
+                asr_model = ASRModelFactory.create_asr_model()
+                asr_model.load_model()
+    
     detected_lang_code, confidence = asr_model.language_detection(load_audio(audio_file.file, encode))
     return {
         "detected_language": tokenizer.LANGUAGES[detected_lang_code],
@@ -150,9 +170,20 @@ async def detect_language(
     default=9000,
     help="Port for the webservice (default: 9000)",
 )
+@click.option(
+    "-w",
+    "--workers",
+    metavar="WORKERS",
+    default=None,
+    type=int,
+    help="Number of worker processes (default: from UVICORN_WORKERS env var or 1)",
+)
 @click.version_option(version=projectMetadata["Version"])
-def start(host: str, port: Optional[int] = None):
-    uvicorn.run(app, host=host, port=port)
+def start(host: str, port: Optional[int] = None, workers: Optional[int] = None):
+    # Get workers from environment variable or CLI argument
+    num_workers = workers if workers is not None else int(os.getenv("UVICORN_WORKERS", "1"))
+    # Pass app as import string to enable workers support
+    uvicorn.run("app.webservice:app", host=host, port=port, workers=num_workers)
 
 
 if __name__ == "__main__":
