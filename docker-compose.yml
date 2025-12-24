@@ -10,7 +10,7 @@ services:
       - ASR_ENGINE=whisperx
       - ASR_DEVICE=cpu
       - ASR_QUANTIZATION=int8
-      - UVICORN_WORKERS=4
+      - UVICORN_WORKERS=6
     ports:
       - "9000:9000"
     volumes:
